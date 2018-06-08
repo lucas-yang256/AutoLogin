@@ -10,7 +10,7 @@
    `$ git clone https://github.com/clouduan/AutoLogin.git && cd AutoLogin`
 #### 配置
 - 确保 python 版本为 3.x.x
-- pip install -r requirements.txt
+- `pip install -r requirements.txt`
 - [登录 sjtu-aixinwu](./sjtu-aixinwu/README.md)
 - [登录 readfree.me](./readfree/README.md)
 
