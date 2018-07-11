@@ -86,7 +86,7 @@ def login():
 
 
 def main():
-    if os.path.exists('readfree.cookies'):
+    if os.path.exists(cookies_path):
         login_by_cookies()
     elif (cookies["csrftoken"] != "") & (cookies["sessionid"] != ""):
         process_cookies()
