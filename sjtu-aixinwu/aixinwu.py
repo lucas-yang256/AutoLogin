@@ -3,33 +3,24 @@
 import requests
 import re
 import os
-import time
 import logging
-import subprocess
 import http.cookiejar
 from urllib.parse import urljoin
 from config import account
 
-loginUrl = 'http://aixinwu.sjtu.edu.cn/index.php/login'
-captUrl = 'https://jaccount.sjtu.edu.cn/jaccount/captcha?'
-postUrl = 'https://jaccount.sjtu.edu.cn/jaccount/ulogin'
-homeUrl = 'http://aixinwu.sjtu.edu.cn/index.php/home'
-currentPath = os.path.dirname(os.path.abspath(__file__))
-accountPath = os.path.join(currentPath, "account.dat")
-cookiesPath = os.path.join(currentPath, "aixinwu.cookies")
-logfilePath = os.path.join(currentPath, "aixinwu.log")
-captPath = os.path.join(currentPath, "captcha.png")
+login_url = 'http://aixinwu.sjtu.edu.cn/index.php/login'
+captcha_url = 'https://jaccount.sjtu.edu.cn/jaccount/captcha?'
+post_url = 'https://jaccount.sjtu.edu.cn/jaccount/ulogin'
+home_url = 'http://aixinwu.sjtu.edu.cn/index.php/home'
+curr_path = os.path.dirname(os.path.abspath(__file__))
+cookies_path = os.path.join(curr_path, "aixinwu.cookies")
+log_path = os.path.join(curr_path, "aixinwu.log")
+captcha_path = os.path.join(curr_path, "captcha.png")
 
-
-def checkNetwork(address):
-    p = subprocess.Popen(["ping.exe", address],
-                         stdin=subprocess.PIPE,
-                         stdout=subprocess.PIPE,
-                         stderr=subprocess.PIPE,
-                         shell=True)
-    out = p.stdout.read()
-    if 'TTL' in out.decode('gbk'):
-        return 1
+logging.basicConfig(filename=log_path,
+                    level='INFO',
+                    format="%(asctime)s [line: %(lineno)d] - %(message)s",
+                    filemode='w')
 
 
 class SJTUer(object):
@@ -41,44 +32,40 @@ class SJTUer(object):
         self.s.headers.update(self.headers)
         self.usr = account['username']
         self.psw = account['password']
-
-    def login_by_cookies(self):
-        if os.path.exists(cookiesPath):
-            logging.info("cookies file exist.")
-        else:
-            logging.info("cookies file does't exist.")
-            return
-        ck = self.load_cookies()
-        if ck is None:
-            logging.error("cookies not loaded.")
-            return
-        self.s.cookies.update(ck)
-        info = self.s.get(loginUrl).text
-        self.save_cookies(self.s.cookies)
-        if self.usr in info:
-            return 1
-
+    
     def save_cookies(self, cookies):
-        save_cj = http.cookiejar.LWPCookieJar()
-        save_ck = {c.name: c.value for c in cookies}
-        requests.utils.cookiejar_from_dict(save_ck, save_cj)
-        save_cj.save(cookiesPath, ignore_expires=True, ignore_discard=True)
-
+        cj = http.cookiejar.LWPCookieJar()
+        ck = {c.name: c.value for c in cookies}
+        requests.utils.cookiejar_from_dict(ck, cj)
+        cj.save(cookies_path, ignore_expires=True, ignore_discard=True)
+        logging.info("Cookies saved")
+    
     def load_cookies(self):
-        try:
-            load_cj = http.cookiejar.LWPCookieJar()
-            load_cj.load(cookiesPath, ignore_expires=True, ignore_discard=True)
-            load_ck = requests.utils.dict_from_cookiejar(load_cj)
-            return load_ck
-        except:
-            return
-
+        load_cj = http.cookiejar.LWPCookieJar()
+        load_cj.load(cookies_path, ignore_expires=True, ignore_discard=True)
+        load_ck = requests.utils.dict_from_cookiejar(load_cj)
+        logging.info("Cookies loaded")
+        return load_ck
+    
+    def download_captcha(self, url):
+        with open(captcha_path, "wb") as f:
+            f.write(self.s.get(url).content)
+        logging.info("Captcha downloaded.")
+    
+    def captcha_rec(self, captcha):
+        files = {
+            'file': ('captcha.jpeg', open(captcha, 'rb'), 'image/jpeg')
+        }
+        req = requests.post('https://t.yctin.com/en/security/captcha-recognition/',
+                            files=files,
+                            headers=self.headers)
+        
+        return req.text.strip()
+    
     def process_cookies(self):
-        """
-        To process the very first cookies.
-        """
-        save_cj = http.cookiejar.LWPCookieJar()
-        save_ck = {
+        """ To process the first cookies. """
+        cj = http.cookiejar.LWPCookieJar()
+        ck = {
             "JASiteCookie": "",
             "PHPSESSID": "",
             "__utma": "",
@@ -89,61 +76,65 @@ class SJTUer(object):
             "__utmz": "",
             "ci_session": ""
         }
-        requests.utils.cookiejar_from_dict(save_ck, save_cj)
-        save_cj.save(cookiesPath, ignore_expires=True, ignore_discard=True)
-
+        requests.utils.cookiejar_from_dict(ck, cj)
+        cj.save(cookies_path, ignore_expires=True, ignore_discard=True)
+    
+    def login_by_cookies(self):
+        if not os.path.exists(cookies_path):
+            logging.info("Cookies don't exist.")
+            return
+        
+        logging.info("Cookies exist.")
+        ck = self.load_cookies()
+        
+        if not ck:
+            logging.error("Failed to load cookies.")
+            return
+        
+        self.s.cookies.update(ck)
+        
+        # 检测用户名是否存在，若存在即说明登录成功
+        info = self.s.get(login_url).text
+        if self.usr in info:
+            logging.info("Successfully login by cookies!")
+            self.save_cookies(self.s.cookies)
+            return True
+    
     def login(self):
-        try:
-            html0 = self.s.get(loginUrl).text
-            url1 = re.findall(r'URL=(.*?)">', html0)[0]
-            html = self.s.get(url1).text
-            self.download(captUrl)
-            formdata = {}
-            formdata['user'] = self.usr
-            formdata['pass'] = self.psw
-            formdata['sid'] = re.findall(r'name="sid" value="(.+?)"', html)[0]
-            formdata['returl'] = re.findall(r'name="returl" value="(.+?)"', html)[0]
-            formdata['se'] = re.findall(r'name="se" value="(.+?)"', html)[0]
-            formdata['v'] = re.findall(r'name="v" value="(.*?)"', html)[0]
-            formdata['captcha'] = self.captcha_rec(captPath)
-            login = self.s.post(postUrl, data=formdata, allow_redirects=False)
-            redUrl = urljoin('https://jaccount.sjtu.edu.cn', login.headers['Location'], )
-            redUrl2 = self.s.get(redUrl, allow_redirects=False).headers['Location']
-            req = self.s.get(redUrl2, allow_redirects=False)
-            redUrl3 = urljoin('http://aixinwu.sjtu.edu.cn', req.headers['Location'])
-            self.s.get(redUrl3)  # 不知道为什么，要get两次。。
-            self.s.get(redUrl3)  # 不知道为什么，要get两次。。
-            info = self.s.get(homeUrl).text
-            if self.usr in info:
-                self.save_cookies(self.s.cookies)
-                return 1
-        except Exception as e:
-            logging.error(date + " || " + str(e))
-            return 0
+        html0 = self.s.get(login_url).text
+        url1 = re.findall(r'URL=(.*?)">', html0)[0]
+        html = self.s.get(url1).text
+        self.download_captcha(captcha_url)
+        
+        formdata = {}
+        formdata['user'] = self.usr
+        formdata['pass'] = self.psw
+        formdata['sid'] = re.findall(r'name="sid" value="(.+?)"', html)[0]
+        formdata['returl'] = re.findall(r'name="returl" value="(.+?)"', html)[0]
+        formdata['se'] = re.findall(r'name="se" value="(.+?)"', html)[0]
+        formdata['v'] = re.findall(r'name="v" value="(.*?)"', html)[0]
+        formdata['captcha'] = self.captcha_rec(captcha_path)
+        
+        login = self.s.post(post_url, data=formdata, allow_redirects=False)
+        redirect_url = urljoin('https://jaccount.sjtu.edu.cn', login.headers['Location'], )
+        redirect_url2 = self.s.get(redirect_url, allow_redirects=False).headers['Location']
+        req = self.s.get(redirect_url2, allow_redirects=False)
+        redirect_url3 = urljoin('http://aixinwu.sjtu.edu.cn', req.headers['Location'])
+        self.s.get(redirect_url3)  # 不知道为什么，要get两次。。
+        self.s.get(redirect_url3)  # 不知道为什么，要get两次。。
+        
+        info = self.s.get(home_url).text
+        if not self.usr in info:
+            logging.error("Login failed.")
+            return
+        else:
+            logging.info("Login successfully!")
+            self.save_cookies(self.s.cookies)
+            return True
 
-    def captcha_rec(self, captcha):
-        files = {
-            'file': ('captcha.jpeg', open(captcha, 'rb'), 'image/jpeg')
-        }
-        req = requests.post('https://t.yctin.com/en/security/captcha-recognition/', files=files, headers=self.headers)
-
-        return req.text.strip()  # strip之必要，mdzz
-
-    def download(self, url):
-        with open(captPath, "wb") as f:
-            f.write(self.s.get(url).content)
-
-
-logging.basicConfig(filename=logfilePath, level='DEBUG')
-date = time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(time.time()))
-logging.info("===============Log Started at " + date + "===============")
 
 sjtuer = SJTUer()
-if sjtuer.login_by_cookies() == 1:
+if sjtuer.login_by_cookies():
     print("Login by cookies successfully!")
-    logging.info("=============Login by cookies successfully at %s =============" % date)
-elif sjtuer.login() == 1:
-    print('Login successfully!')
-    logging.info("=============Login successfully at %s =============" % date)
 else:
-    os._exit(0)
+    sjtuer.login()
