@@ -94,7 +94,7 @@ def login():
 def main():
     if login_by_cookies():
         print("Login by cookies successfully!")
-    elif (cookies["csrftoken"] & cookies["sessionid"]):
+    elif (cookies["csrftoken"] and cookies["sessionid"]):
         process_cookies()
         login_by_cookies()
     else:
