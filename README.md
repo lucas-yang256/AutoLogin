@@ -25,6 +25,6 @@
 
 - 执行`crontab -e`进行编辑，crontab 的格式可以参考[ crontab 定时任务](http://linuxtools-rst.readthedocs.io/zh_CN/latest/tool/crontab.html#crontab)。比如我的设置就是
     ```
-    3 31 0,12 * * * python3 /root/autoLogin/readfree.py
-    24 31 0,12 * * * python3 /root/autoLogin/aixinwu.py
+    31 0,12 * * * python3 /root/AutoLogin/readfree.py
+    31 0,12 * * * python3 /root/AutoLogin/aixinwu.py
     ```
