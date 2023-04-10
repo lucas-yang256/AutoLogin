@@ -8,7 +8,7 @@
 #### 购买 VPS
 #### 克隆库
    ```bash
-   $ git clone https://github.com/voldikss/AutoLogin.git && cd AutoLogin
+   $ git clone https://github.com/lucas-yang256/AutoLogin.git && cd AutoLogin
    ```
 #### 配置
 - 确保 python 版本为 3
